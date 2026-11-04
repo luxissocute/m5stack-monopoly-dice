@@ -1,0 +1,78 @@
+const assert = require('node:assert/strict');
+const { createRequire } = require('node:module');
+const fs = require('node:fs/promises');
+const { _electron, chromium } = createRequire(require.resolve('@playwright/test'))('playwright');
+
+(async () => {
+  const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+  const app = await _electron.launch({ executablePath: process.argv[2] || require('electron'), args: process.argv[2] ? [] : ['.'], env });
+  let browser;
+  try {
+    const main = await app.firstWindow();
+    await main.locator('#mode-multi').click();
+    await main.locator('#lobby-room').click();
+    await main.locator('#online-create').click();
+    await main.locator('#host-start').click();
+    await main.locator('#host-link').waitFor({ timeout: 120000 });
+    const shareUrl = await main.locator('#host-link').inputValue();
+    assert.ok(shareUrl.startsWith('https://') && shareUrl.includes('access='));
+    browser = await chromium.launch({ channel: 'chrome', headless: true });
+    const firstContext = await browser.newContext(), secondContext = await browser.newContext();
+    const first = await firstContext.newPage(), second = await secondContext.newPage();
+    const errors = [];
+    for (const page of [main, first, second]) page.on('pageerror', error => errors.push(error.message));
+    await first.goto(shareUrl, { timeout: 60000 });
+    await first.locator('#mode-multi').click();
+    await first.locator('#lobby-room').click();
+    await first.locator('#online-create').click();
+    await first.locator('#room-name').fill('遠端一號');
+    await first.locator('#room-seats').selectOption('3');
+    await first.locator('#room-submit').click();
+    await first.locator('#invite-link').waitFor({ timeout: 15000 });
+    const invite = await first.locator('#invite-link').inputValue();
+    assert.ok(invite.includes('access=') && invite.includes('room='));
+    await second.goto(invite, { timeout: 60000 });
+    await second.locator('#room-name').fill('遠端二號');
+    await second.locator('#room-submit').click();
+    await first.getByText('遠端二號', { exact: true }).waitFor({ timeout: 15000 });
+    await main.locator('#room-setup-back').click();
+    await main.locator('#online-join').click();
+    await main.locator('#remote-host').fill(invite);
+    await main.locator('#room-name').fill('App 朋友');
+    await main.locator('#room-submit').click();
+    await first.getByText('App 朋友', { exact: true }).waitFor({ timeout: 15000 });
+    await first.locator('#room-start').click();
+    await first.locator('#turn-action').waitFor({ timeout: 15000 });
+    await first.locator('#turn-action').click();
+    await first.locator('#dice-reveal .dice-result').waitFor({ timeout: 15000, state: 'attached' });
+    await second.locator('#dice-reveal .dice-result').waitFor({ timeout: 15000, state: 'attached' });
+    assert.equal(await first.locator('#dice-reveal .dice-result').textContent(), await second.locator('#dice-reveal .dice-result').textContent());
+    await main.locator('#dice-reveal .dice-result').waitFor({ timeout: 15000, state: 'attached' });
+    assert.equal(await first.locator('#dice-reveal .dice-result').textContent(), await main.locator('#dice-reveal .dice-result').textContent());
+    const window = await app.browserWindow(main);
+    await window.evaluate(win => win.hide());
+    assert.equal(await window.evaluate(win => win.isVisible()), false, 'Explicit background hiding should preserve hosting');
+    assert.equal((await fetch(shareUrl)).status, 200, 'Friends must remain connected while host UI is hidden');
+    await window.evaluate(win => win.show());
+    await main.locator('#room-open').click();
+    main.once('dialog', dialog => dialog.accept());
+    await main.locator('#host-background').click();
+    for (let attempt = 0; attempt < 100 && await window.evaluate(win => win.isVisible()); attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.equal(await window.evaluate(win => win.isVisible()), false);
+    await window.evaluate(win => win.show());
+    await main.locator('#mode-multi').click();
+    await main.locator('#lobby-room').click();
+    await main.locator('#online-create').click();
+    await main.waitForFunction(() => document.querySelector('#host-panel')?.textContent?.includes('2 位連線玩家'));
+    await fs.mkdir('artifacts', { recursive: true });
+    await main.screenshot({ path: 'artifacts/final-host-control.png', fullPage: true });
+    await first.screenshot({ path: 'artifacts/final-remote-player.png', fullPage: true });
+    main.once('dialog', dialog => dialog.accept());
+    await main.locator('#host-stop').click();
+    await main.locator('#host-start').waitFor();
+    assert.deepEqual(errors, []);
+    console.log('PASS: desktop hosting, browser/App remote joining, synchronized dice, background mode, leaving player seat for host-only mode and stop sharing.');
+  } finally { await browser?.close(); await app.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

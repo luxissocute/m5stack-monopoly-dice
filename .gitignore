@@ -1,0 +1,20 @@
+node_modules/
+upstream/
+dist/
+release/
+desktop/generated/
+desktop/vendor/cloudflared.exe
+desktop/vendor/*.download
+.runtime/
+artifacts/
+playwright-report/
+test-results*/
+.env
+.env.*
+!.env.example
+.DS_Store
+tools/
+*.log
+
+# Separate Sites deployment checkout
+sites/

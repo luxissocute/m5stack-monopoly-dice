@@ -1,0 +1,25 @@
+appId: tw.labu.monopoly.dice
+productName: Labu Toy City
+directories:
+  output: release
+files:
+  - dist/**/*
+  - desktop/**/*
+  - package.json
+  - '!desktop/**/*.test.*'
+  - '!desktop/vendor/**/*'
+extraResources:
+  - from: desktop/vendor/cloudflared.exe
+    to: cloudflared.exe
+  - from: desktop/vendor/LICENSE.cloudflared
+    to: LICENSE.cloudflared
+asar: true
+npmRebuild: false
+win:
+  target:
+    - target: portable
+      arch: [x64]
+  artifactName: Labu-Toy-City-${version}-Windows.exe
+  signAndEditExecutable: false
+portable:
+  requestExecutionLevel: user
