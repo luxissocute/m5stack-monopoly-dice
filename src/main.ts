@@ -468,7 +468,7 @@ function renderDiceReveal() {
   el.hidden = false;
   el.classList.remove('hardware-shaking');
   el.classList.toggle('hardware-result', hardwareResult);
-  el.innerHTML = `<span>${esc(current().name)} 擲骰！</span><div class="dice-tumble">${state.dice.map(diceMarkup).join("")}</div><strong class="dice-result">${state.dice.join(' ＋ ')} ＝ ${state.die} 格</strong>`;
+  el.innerHTML = `<span>${esc(current().name)} 擲骰！</span><div class="dice-tumble">${state.dice.map(diceMarkup).join("")}</div><strong class="dice-result">前進 ${state.die} 格</strong>`;
   const finalDice = [...state.dice];
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (!reducedMotion && !hardwareResult) {
